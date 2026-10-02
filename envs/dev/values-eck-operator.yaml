@@ -1,0 +1,13 @@
+installCRDs: true
+
+replicaCount: 1
+
+nodeSelector:
+  workload: general
+
+resources:
+  requests:
+    cpu: 100m        # 100m = one tenth of one CPU core
+    memory: 150Mi
+  limits:
+    memory: 512Mi
