@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: elastic-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  labels:
+    env: dev
+    app.kubernetes.io/part-of: fraud-platform
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: fraud-platform
+
+  source:
+    repoURL: https://github.com/kelvinSeamount/fraud-gitops.git
+    targetRevision: main
+    path: manifests/dev/elastic
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: logging
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m
+        
+  ignoreDifferences:
+    - group: elasticsearch.k8s.elastic.co
+      kind: Elasticsearch
+      jsonPointers:
+        - /metadata/annotations
+    - group: kibana.k8s.elastic.co
+      kind: Kibana
+      jsonPointers:
+        - /metadata/annotations
+
+  revisionHistoryLimit: 10
