@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jaeger
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    env: dev
+    app.kubernetes.io/part-of: fraud-platform
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: fraud-platform
+
+  sources:
+    - repoURL: https://github.com/kelvinSeamount/fraud-gitops.git
+      targetRevision: main
+      ref: values
+
+    - repoURL: https://jaegertracing.github.io/helm-charts
+      chart: jaeger
+      targetRevision: 4.12.0
+      helm:
+        releaseName: jaeger
+        valueFiles:
+          - $values/envs/dev/values-jaeger.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+
+  revisionHistoryLimit: 10

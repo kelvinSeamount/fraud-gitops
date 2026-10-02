@@ -1,0 +1,49 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hello-platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  labels:
+    env: dev
+    app.kubernetes.io/part-of: fraud-platform
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: fraud-platform
+
+  sources:
+    - repoURL: https://github.com/kelvinSeamount/fraud-gitops.git
+      targetRevision: main
+      ref: values
+
+  
+    - repoURL: https://github.com/kelvinSeamount/fraud-gitops.git
+      targetRevision: main
+      path: helm-charts/fraud-service
+      helm:
+        releaseName: hello-platform
+        valueFiles:
+          - $values/envs/dev/values-hello-platform.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform-demo
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+
+  revisionHistoryLimit: 10
