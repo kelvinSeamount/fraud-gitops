@@ -1,0 +1,114 @@
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+image:
+  repository: ""
+  tag: ""
+
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+serviceAccount:
+  create: true
+  name: ""         
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# ─── NETWORK ADDRESS ────────────────────────────────────────────────────────
+service:
+  enabled: true
+  type: ClusterIP     # reachable inside the cluster only
+  port: 8080          # the address others use
+  targetPort: 8080    # the port inside the container
+  annotations: {}
+
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# ─── AUTOMATIC SCALING ──────────────────────────────────────────────────────
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+
+# ─── HEALTH CHECKS ──────────────────────────────────────────────────────────
+livenessProbe:
+  enabled: true
+  path: /healthz
+  # Blank means "use service.targetPort".
+  port: ""
+  initialDelaySeconds: 15
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  path: /healthz
+  # Blank means "use service.targetPort".
+  port: ""
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+
+# ─── CONFIGURATION ──────────────────────────────────────────────────────────
+config:
+  
+  env: {}
+  files: {}
+  filesMountPath: ""
+
+
+env: []
+
+envFrom: []
+
+# ─── EXTRA DISKS AND MOUNTS ─────────────────────────────────────────────────
+volumes: []
+volumeMounts: []
+
+nodeSelector:
+  workload: general
+tolerations: []
+affinity: {}
+
+
+command: []
+args: []
+
+serviceMonitor:
+  enabled: false
+  path: /metrics
+  port: ""            # blank = use the service port
+  interval: 30s
+
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
