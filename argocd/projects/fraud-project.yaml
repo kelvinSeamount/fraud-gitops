@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: fraud-platform
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: fraud-platform
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Real-Time Fraud Detection Platform with Self-Healing MLOps
+
+  sourceRepos:
+    - https://github.com/YOUR_GITHUB_USERNAME/fraud-gitops.git
+    - https://prometheus-community.github.io/helm-charts
+    - https://helm.elastic.co
+    - https://jaegertracing.github.io/helm-charts
+    - https://open-telemetry.github.io/opentelemetry-helm-charts
+
+  
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: argocd          # the child Application objects themselves
+    - server: https://kubernetes.default.svc
+      namespace: monitoring      # Prometheus, Grafana, Alertmanager
+    - server: https://kubernetes.default.svc
+      namespace: logging         # Elasticsearch, Kibana
+    - server: https://kubernetes.default.svc
+      namespace: elastic-system  # the ECK operator itself
+    - server: https://kubernetes.default.svc
+      namespace: observability   # Jaeger, OpenTelemetry Collector
+    - server: https://kubernetes.default.svc
+      namespace: platform-demo   # hello-platform, the GitOps canary
+    - server: https://kubernetes.default.svc
+      namespace: kube-system     # node-exporter DaemonSet, kube-state-metrics
+
+  
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  orphanedResources:
+    warn: true
+    ignore:
+      - kind: ServiceAccount
+        name: default
+      - kind: ConfigMap
+        name: kube-root-ca.crt
