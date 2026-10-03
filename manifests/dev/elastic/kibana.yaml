@@ -1,0 +1,104 @@
+# =============================================================================
+# Kibana — the human door onto Elasticsearch
+#
+# Another ECK custom resource. The operator builds the Deployment, Service and
+# certificates, and — because of elasticsearchRef below — also creates a
+# dedicated service-account user in Elasticsearch, wires its credentials in,
+# and trusts the ES CA. None of that is written here, and none of it should be:
+# hand-managed Kibana credentials are the thing the operator pattern exists to
+# delete.
+#
+# THE NAME IS LOAD-BEARING: fraud-kibana.
+# ----------------------------------------
+# ECK derives the HTTP Service as <name>-kb-http, so this yields
+# `fraud-kibana-kb-http` — which is exactly what
+# fraud-infra/scripts/03-verify-platform.sh prints as the port-forward target.
+# Rename this resource and that hint sends you to a service that does not
+# exist.
+#
+# apiVersion is kibana.k8s.elastic.co/v1 — the same v1alpha1 trap as
+# Elasticsearch: listed in the CRD, served: false. Confirm with
+#   kubectl api-resources --api-group=kibana.k8s.elastic.co
+# =============================================================================
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: fraud-kibana
+  namespace: logging
+  annotations:
+    # Free tier, explicitly. Same reasoning as Elasticsearch: an unrequested
+    # 30-day trial is a time bomb with a three-week fuse.
+    eck.k8s.elastic.co/license: basic
+  labels:
+    app.kubernetes.io/part-of: fraud-platform
+    env: dev
+
+spec:
+  # Must match the Elasticsearch version exactly. ECK refuses a Kibana newer
+  # than its Elasticsearch, and the rejection arrives as a validating-webhook
+  # error at apply time — which surfaces in ArgoCD as a sync failure on this
+  # file rather than as a version message.
+  version: 9.5.0
+
+  count: 1
+
+  elasticsearchRef:
+    name: fraud-elasticsearch
+    # Same namespace, so `namespace:` is omitted. Naming it would also work;
+    # leaving it out keeps the fact that these two are co-located visible.
+
+  http:
+    tls:
+      selfSignedCertificate:
+        # TLS OFF here, and this is the one deliberate weakening in the file.
+        #
+        # This service is reached by a human through a port-forward:
+        #
+        #   kubectl port-forward svc/fraud-kibana-kb-http -n logging 5601:5601
+        #
+        # With a self-signed certificate that URL is https:// and the browser
+        # shows a warning. That exact confusion — http vs https behind a
+        # port-forward — cost hours on ArgoCD already, made worse by Chrome
+        # silently upgrading http to https from a cached note. The whole story
+        # is in fraud-infra/docs/TROUBLESHOOTING.md §12.
+        #
+        # Nothing is exposed by this: the Service is ClusterIP, there is no
+        # Ingress, and the only route in is a port-forward that already
+        # required cluster credentials. Traffic to Elasticsearch stays
+        # encrypted — that side keeps its certificate.
+        #
+        # Phase 4 reverses this: an ALB with a real ACM certificate for
+        # *.fraud-dev.piroo.online, and then TLS is on because it is finally
+        # TLS a browser will accept.
+        disabled: true
+
+  podTemplate:
+    spec:
+      # The general pool. Kibana is a Node.js web app — it renders charts, it
+      # does not hold data — so it has no business on the memory pool that
+      # exists to isolate Elasticsearch and Kafka from everything else.
+      #
+      # No toleration, on purpose. The general pool carries no taint, and
+      # adding one "just in case" would make this pod eligible for the memory
+      # nodes, which is precisely what the split is designed to prevent.
+      #
+      # Note its pods are named fraud-kibana-kb-*, which does not match the
+      # "elasticsearch|kafka" grep in scripts/03 check #4 — so running here is
+      # correct rather than a misplacement.
+      nodeSelector:
+        workload: general
+
+      containers:
+        # Name fixed by ECK, same merge-by-name rule as the ES container.
+        - name: kibana
+          resources:
+            requests:
+              cpu: 200m
+              memory: 1Gi
+            limits:
+              # Kibana 9 is comfortable in 1Gi and occasionally spikes during
+              # its first-run optimiser pass. Burstable rather than Guaranteed
+              # is right here: unlike Elasticsearch, this pod holds no state,
+              # so evicting it under node pressure costs a restart and nothing
+              # else.
+              memory: 2Gi
