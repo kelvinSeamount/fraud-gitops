@@ -1,0 +1,72 @@
+# =============================================================================
+# StorageClass gp3 — where every PersistentVolumeClaim actually lands
+#
+# EKS ships exactly one StorageClass, `gp2`, and it is marked default. gp3 is
+# the newer generation: same durability, roughly 20% cheaper per GiB, and its
+# 3000 IOPS / 125 MB/s baseline is free rather than scaled off volume size. A
+# 20Gi gp2 volume gets 60 IOPS. The same volume on gp3 gets 3000.
+#
+# The provisioner below is the EBS CSI *driver*, installed as an EKS addon by
+# Terraform with its own IRSA role (fraud-infra modules/eks/main.tf:287). If
+# that addon is missing, PVCs sit Pending with no events and nothing explains
+# why — the class exists, but nobody is listening for it.
+#
+# NOT marked default, deliberately.
+# -------------------------------
+# Two StorageClasses both claiming `is-default-class: "true"` is undefined
+# behaviour: Kubernetes picks one and warns. Rather than fight EKS's gp2 for
+# the crown, every consumer names gp3 explicitly:
+#
+#   envs/dev/values-kube-prometheus-stack.yaml   prometheus, grafana, alertmanager
+#   manifests/dev/elastic/elasticsearch.yaml     the ES data volume
+#
+# An explicit name is also just better GitOps: the manifest says which disk it
+# wants instead of inheriting whatever the cluster happened to default to. A
+# PVC that says nothing produces a different volume on a different cluster.
+#
+# Careful: `parameters` are IMMUTABLE once the class exists. Changing `type` or
+# `encrypted` later requires deleting and recreating the StorageClass — which
+# ArgoCD will happily do, and which orphans nothing, but existing PVs keep the
+# parameters they were born with.
+# =============================================================================
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  labels:
+    app.kubernetes.io/part-of: fraud-platform
+    env: dev
+
+provisioner: ebs.csi.aws.com
+
+parameters:
+  type: gp3
+  fsType: ext4
+  # Encryption at rest, using the account's default EBS KMS key. Cost is zero
+  # and it cannot be switched on after the fact — an unencrypted volume stays
+  # unencrypted for life. Free now, impossible later.
+  encrypted: "true"
+
+# WaitForFirstConsumer, and this one matters more than it looks.
+# ----------------------------------------------------------------
+# An EBS volume lives in ONE availability zone and can only attach to a node in
+# that zone. With `Immediate`, the volume is created the moment the PVC appears
+# — before anyone knows where the pod will run. Get unlucky and the volume
+# lands in eu-central-1a while the only schedulable node is in 1b, and the pod
+# sits Pending on a volume-node-affinity conflict for ever.
+#
+# That risk is not hypothetical here: Elasticsearch is pinned to the tainted
+# memory pool by nodeSelector AND toleration, so its set of legal nodes is
+# already narrow. WaitForFirstConsumer delays provisioning until the scheduler
+# has picked a node, then creates the volume in that node's zone.
+volumeBindingMode: WaitForFirstConsumer
+
+# Grow a volume in place without recreating the pod. Prometheus filling its
+# 20Gi at 3am is a resize, not an outage.
+allowVolumeExpansion: true
+
+# Delete. This is a dev cluster that is destroyed most evenings (~$16/day), and
+# Retain would leave orphaned EBS volumes billing quietly after every teardown.
+# Phase 1's MLflow and Phase 2's Kafka get Retain when they hold data worth
+# keeping — the artifacts already live in S3, which survives the cluster.
+reclaimPolicy: Delete

@@ -1,0 +1,99 @@
+# =============================================================================
+# Namespaces — the platform's rooms
+#
+# Declared here and NOWHERE else. One owner per resource: if two Applications
+# both claimed to create `monitoring`, ArgoCD would report a shared-resource
+# conflict and flap OutOfSync forever. See docs/ARCHITECTURE.md §10.
+#
+# These are components, not environments (§4). dev/qa/prod are separate
+# CLUSTERS with separate Terraform state, so `fraud-qa-cluster` will have a
+# `monitoring` namespace of its own with these same names.
+#
+# Two namespaces are deliberately ABSENT:
+#
+#   argocd            ArgoCD cannot create the namespace it is running in.
+#   external-secrets  ESO must exist before ArgoCD can request any secret.
+#
+# Both are made by `helm --create-namespace` in fraud-infra/scripts/01. That is
+# the bootstrap boundary, and it is a real deadlock rather than an oversight —
+# docs/ARCHITECTURE.md §5 draws it out.
+#
+# kube-system is also absent: Kubernetes ships it. The node-exporter DaemonSet
+# and kube-state-metrics land there, which is why the AppProject permits it.
+#
+# The sync-wave below is *within* this Application, unrelated to the wave -1
+# that orders platform-bootstrap ahead of its siblings. ArgoCD already sorts
+# Namespace ahead of other kinds by default; saying so explicitly turns
+# "happens to work" into "is specified", which is the same reason the Grafana
+# secret sits in wave -1 at the outer level.
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  labels:
+    app.kubernetes.io/part-of: fraud-platform
+    env: dev
+    # Prometheus, Grafana, Alertmanager — and the grafana-admin Secret that
+    # External Secrets materialises next to them.
+    component: monitoring
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logging
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  labels:
+    app.kubernetes.io/part-of: fraud-platform
+    env: dev
+    # The Elasticsearch and Kibana *workloads*. Not the operator — see below.
+    component: logging
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: elastic-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  labels:
+    app.kubernetes.io/part-of: fraud-platform
+    env: dev
+    # The ECK operator, kept apart from the Elasticsearch it manages. The
+    # operator is cluster-scoped and outlives any individual ES cluster; the ES
+    # cluster is a workload that gets deleted and rebuilt. Different lifecycles,
+    # different namespaces.
+    #
+    # This namespace must exist before wave 0: the eck-operator Application
+    # does NOT carry CreateNamespace=true, on purpose — namespaces have one
+    # owner and that owner is this file.
+    component: operators
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  labels:
+    app.kubernetes.io/part-of: fraud-platform
+    env: dev
+    # Jaeger and the OpenTelemetry Collector — traces, and the spanmetrics
+    # connector that turns them into RED metrics for free.
+    component: tracing
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  labels:
+    app.kubernetes.io/part-of: fraud-platform
+    env: dev
+    # hello-platform, the GitOps canary. Phase 0's whole proof lives here:
+    # change a value file, commit, and watch this namespace change with no
+    # kubectl apply anywhere.
+    component: demo
