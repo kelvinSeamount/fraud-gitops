@@ -1,0 +1,29 @@
+{{- if .Values.config.env }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fraud-service.envConfigName" . }}
+  labels:
+    {{- include "fraud-service.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.config.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}
+
+{{- if .Values.config.files }}
+{{- if .Values.config.env }}
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fraud-service.filesConfigName" . }}
+  labels:
+    {{- include "fraud-service.labels" . | nindent 4 }}
+data:
+  {{- range $name, $content := .Values.config.files }}
+  {{ $name }}: |
+{{ $content | indent 4 }}
+  {{- end }}
+{{- end }}
