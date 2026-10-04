@@ -19,7 +19,7 @@ spec:
 
   sources:
     - repoURL: https://github.com/kelvinSeamount/fraud-gitops.git
-      targetRevision: main
+      targetRevision: feature/argocd_setup
       ref: values
 
     - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
