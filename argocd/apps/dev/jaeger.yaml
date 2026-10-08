@@ -15,7 +15,7 @@ spec:
 
   sources:
     - repoURL: https://github.com/kelvinSeamount/fraud-gitops.git
-      targetRevision: feature/argocd_setup
+      targetRevision: main
       ref: values
 
     - repoURL: https://jaegertracing.github.io/helm-charts

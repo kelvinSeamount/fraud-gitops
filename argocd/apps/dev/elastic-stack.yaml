@@ -15,7 +15,7 @@ spec:
 
   source:
     repoURL: https://github.com/kelvinSeamount/fraud-gitops.git
-    targetRevision: feature/argocd_setup
+    targetRevision: main
     path: manifests/dev/elastic
 
   destination:

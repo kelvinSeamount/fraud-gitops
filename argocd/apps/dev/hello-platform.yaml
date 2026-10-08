@@ -15,12 +15,12 @@ spec:
 
   sources:
     - repoURL: https://github.com/kelvinSeamount/fraud-gitops.git
-      targetRevision: feature/argocd_setup
+      targetRevision: main
       ref: values
 
   
     - repoURL: https://github.com/kelvinSeamount/fraud-gitops.git
-      targetRevision: feature/argocd_setup
+      targetRevision: main
       path: helm-charts/fraud-service
       helm:
         releaseName: hello-platform
