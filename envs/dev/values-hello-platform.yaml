@@ -114,7 +114,7 @@ config:
       <body>
         <div class="card">
           <h1>hello-platform</h1>
-          <div class="v">v1</div>
+          <div class="v">v2</div>
           <p>Delivered by ArgoCD from fraud-gitops</p>
           <p>no kubectl was involved</p>
         </div>
