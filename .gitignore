@@ -1,0 +1,29 @@
+# ── Secrets ────────────────────────────────────────────────────────────────
+# Nothing secret should ever reach this repo. External Secrets Operator pulls
+# credentials from AWS Secrets Manager at runtime. These rules are a backstop
+# against accident, not the policy itself.
+*.env
+.env*
+secrets.yaml
+*-secrets.yaml
+*-secret.yaml
+kubeconfig*
+*.pem
+*.key
+
+# The un-ignore below is load-bearing — see the note in the README.
+!*-externalsecret.yaml
+
+# ── Helm working files ─────────────────────────────────────────────────────
+# Produced by `helm template` / `helm dependency update` when debugging locally.
+charts/
+Chart.lock
+*.tgz
+.helm/
+
+# ── Editors and OS ─────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~

@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel-collector
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    env: dev
+    app.kubernetes.io/part-of: fraud-platform
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: fraud-platform
+
+  sources:
+    - repoURL: https://github.com/kelvinSeamount/fraud-gitops.git
+      targetRevision: main
+      ref: values
+
+    - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+      chart: opentelemetry-collector
+      targetRevision: 0.172.0
+      helm:
+        releaseName: otel-collector
+        valueFiles:
+          - $values/envs/dev/values-otel-collector.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+
+  revisionHistoryLimit: 10

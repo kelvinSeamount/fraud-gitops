@@ -1,0 +1,83 @@
+mode: deployment
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+command:
+  name: otelcol-contrib
+
+replicaCount: 1
+
+nodeSelector:
+  workload: general
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    memory: 768Mi
+
+ports:
+  metrics:
+    enabled: true
+  spanmetrics:
+    enabled: true
+    containerPort: 8890
+    servicePort: 8890
+    protocol: TCP
+
+config:
+
+  connectors:
+    spanmetrics:
+      histogram:
+        explicit:
+          buckets:
+            [2ms, 4ms, 6ms, 8ms, 10ms, 25ms, 50ms, 100ms, 200ms,
+             400ms, 800ms, 1s, 2s, 5s, 10s]
+      dimensions:
+        - name: http.request.method
+          default: GET
+        - name: http.response.status_code
+        - name: http.route
+
+      exemplars:
+        enabled: true
+
+      metrics_flush_interval: 15s
+
+  exporters:
+    
+    otlp/jaeger:
+      endpoint: jaeger.observability.svc.cluster.local:4317
+      tls:
+        insecure: true
+    prometheus/spanmetrics:
+      endpoint: "0.0.0.0:8890"
+
+      add_metric_suffixes: true
+      resource_to_telemetry_conversion:
+        enabled: true
+
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp, jaeger, zipkin]
+        processors:
+          - memory_limiter   
+          - batch          
+        exporters:
+          - otlp/jaeger
+          - spanmetrics      
+      metrics/spanmetrics:
+        receivers: [spanmetrics]
+        processors: [batch]
+        exporters: [prometheus/spanmetrics]
+
+serviceMonitor:
+  enabled: true
+  metricsEndpoints:
+    - port: metrics     
+      interval: 30s
+    - port: spanmetrics   
+      interval: 15s       

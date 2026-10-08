@@ -1,0 +1,141 @@
+
+fullnameOverride: hello-platform
+
+# Two copies on purpose. One copy cannot demonstrate a rolling update — with a
+# single copy there is always a moment with nothing serving.
+replicaCount: 2
+
+# ─── THE CONTAINER ──────────────────────────────────────────────────────────
+image:
+ 
+  repository: nginxinc/nginx-unprivileged
+  # An exact version. Never "latest" — see values.yaml for why.
+  tag: 1.29-alpine
+  pullPolicy: IfNotPresent
+
+# ─── IDENTITY ───────────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  # No annotation, so no AWS access. A web page has no business reaching AWS.
+  # Phase 1's scoring service puts its AWS role here.
+  annotations: {}
+
+# ─── SECURITY ───────────────────────────────────────────────────────────────
+# Overriding the chart defaults, and both overrides are deliberate.
+podSecurityContext:
+  runAsNonRoot: true
+  # The chart defaults to user 1000. This image builds its directories for user
+  # 101, its own, so run as that instead. Forcing 1000 here would produce a
+  # permission error inside the container that reads nothing like a permission
+  # error from outside.
+  runAsUser: 101
+  runAsGroup: 101
+  fsGroup: 101
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+  # ── A DELIBERATE EXCEPTION, WRITTEN DOWN RATHER THAN HIDDEN ──────────────
+  # The chart defaults this to true, which is correct for real services.
+  #
+  # nginx writes several things to its own filesystem at startup — temporary
+  # directories, a process-id file, and a small config rewrite. Making all of
+  # that work under a read-only filesystem needs three or four extra mounts,
+  # each a new way for the canary to fail.
+  #
+  # The canary's entire value is being the thing that CANNOT fail for its own
+  # reasons. Trading strictness for reliability is the right way round here.
+  #
+  # Phase 1 services keep the default of true and mount scratch space
+  # explicitly — which is easy when you control the program.
+  readOnlyRootFilesystem: false
+
+# ─── ADDRESS ────────────────────────────────────────────────────────────────
+service:
+  enabled: true
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080     # what nginx-unprivileged listens on
+
+# ─── HOW MUCH IT MAY USE ────────────────────────────────────────────────────
+# Tiny. It serves one page.
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi
+
+# ─── HEALTH CHECKS ──────────────────────────────────────────────────────────
+# The chart defaults to /healthz, which this image does not have. Point both at
+# the page itself — if the page serves, it is working.
+readinessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 3
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+livenessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 10
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# ─── THE PAGE ITSELF ────────────────────────────────────────────────────────
+# A file placed into the container, built from this text.
+#
+# THE VERSION NUMBER BELOW IS THE EXPERIMENT. Changing it, committing, and
+# pushing is Phase 0's final test — see Step E.
+config:
+  files:
+    index.html: |
+      <!doctype html>
+      <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <title>hello-platform</title>
+        <style>
+          body { font-family: system-ui, sans-serif; background: #0d1117;
+                 color: #e6edf3; display: grid; place-items: center;
+                 height: 100vh; margin: 0; }
+          .card { text-align: center; }
+          h1 { font-size: 2rem; margin: 0 0 .5rem; }
+          .v { font-size: 3rem; font-weight: 700; color: #58a6ff; }
+          p { color: #8b949e; margin: .25rem 0; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>hello-platform</h1>
+          <div class="v">v1</div>
+          <p>Delivered by ArgoCD from fraud-gitops</p>
+          <p>no kubectl was involved</p>
+        </div>
+      </body>
+      </html>
+
+  # Where to put that file. nginx serves whatever lives here.
+  filesMountPath: /usr/share/nginx/html
+
+# ─── MACHINES ───────────────────────────────────────────────────────────────
+# The ordinary machines. No toleration needed — they carry no fence.
+nodeSelector:
+  workload: general
+
+# ─── NOT NEEDED HERE ────────────────────────────────────────────────────────
+# Off because nginx publishes no numbers. Switching it on would create a
+# permanent "cannot reach target" alarm — and an alarm that is always on is one
+# nobody reads.
+serviceMonitor:
+  enabled: false
+
+# A static page does not need to scale. Phase 1's scoring service does.
+autoscaling:
+  enabled: false

@@ -1,0 +1,25 @@
+{{- if .Values.service.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fraud-service.fullname" . }}
+  labels:
+    {{- include "fraud-service.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+      name: http
+  {{/* Uses the SAME definition as the Deployment. This is why the helper
+       exists: if these two ever disagreed by one character, this address
+       would point at nothing, and the only symptom would be "connection
+       refused" while every dashboard shows healthy. */}}
+  selector:
+    {{- include "fraud-service.selectorLabels" . | nindent 4 }}
+{{- end }}
