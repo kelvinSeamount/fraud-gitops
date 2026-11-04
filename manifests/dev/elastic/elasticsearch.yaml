@@ -26,8 +26,15 @@ spec:
 
       podTemplate:
         spec:
-          nodeSelector:
-            workload: memory
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoreDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: worload
+                        operator: In
+                        values:
+                          - memory
 
           tolerations:
             - key: workload
