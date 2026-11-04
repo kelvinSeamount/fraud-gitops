@@ -1,8 +1,4 @@
-
 fullnameOverride: hello-platform
-
-# Two copies on purpose. One copy cannot demonstrate a rolling update — with a
-# single copy there is always a moment with nothing serving.
 replicaCount: 2
 
 # ─── THE CONTAINER ──────────────────────────────────────────────────────────
@@ -24,10 +20,6 @@ serviceAccount:
 # Overriding the chart defaults, and both overrides are deliberate.
 podSecurityContext:
   runAsNonRoot: true
-  # The chart defaults to user 1000. This image builds its directories for user
-  # 101, its own, so run as that instead. Forcing 1000 here would produce a
-  # permission error inside the container that reads nothing like a permission
-  # error from outside.
   runAsUser: 101
   runAsGroup: 101
   fsGroup: 101
@@ -37,20 +29,6 @@ securityContext:
   capabilities:
     drop:
       - ALL
-
-  # ── A DELIBERATE EXCEPTION, WRITTEN DOWN RATHER THAN HIDDEN ──────────────
-  # The chart defaults this to true, which is correct for real services.
-  #
-  # nginx writes several things to its own filesystem at startup — temporary
-  # directories, a process-id file, and a small config rewrite. Making all of
-  # that work under a read-only filesystem needs three or four extra mounts,
-  # each a new way for the canary to fail.
-  #
-  # The canary's entire value is being the thing that CANNOT fail for its own
-  # reasons. Trading strictness for reliability is the right way round here.
-  #
-  # Phase 1 services keep the default of true and mount scratch space
-  # explicitly — which is easy when you control the program.
   readOnlyRootFilesystem: false
 
 # ─── ADDRESS ────────────────────────────────────────────────────────────────
@@ -69,9 +47,6 @@ resources:
   limits:
     memory: 64Mi
 
-# ─── HEALTH CHECKS ──────────────────────────────────────────────────────────
-# The chart defaults to /healthz, which this image does not have. Point both at
-# the page itself — if the page serves, it is working.
 readinessProbe:
   enabled: true
   path: /
@@ -88,11 +63,6 @@ livenessProbe:
   timeoutSeconds: 5
   failureThreshold: 3
 
-# ─── THE PAGE ITSELF ────────────────────────────────────────────────────────
-# A file placed into the container, built from this text.
-#
-# THE VERSION NUMBER BELOW IS THE EXPERIMENT. Changing it, committing, and
-# pushing is Phase 0's final test — see Step E.
 config:
   files:
     index.html: |
@@ -124,18 +94,11 @@ config:
   # Where to put that file. nginx serves whatever lives here.
   filesMountPath: /usr/share/nginx/html
 
-# ─── MACHINES ───────────────────────────────────────────────────────────────
-# The ordinary machines. No toleration needed — they carry no fence.
 nodeSelector:
   workload: general
 
-# ─── NOT NEEDED HERE ────────────────────────────────────────────────────────
-# Off because nginx publishes no numbers. Switching it on would create a
-# permanent "cannot reach target" alarm — and an alarm that is always on is one
-# nobody reads.
 serviceMonitor:
   enabled: false
 
-# A static page does not need to scale. Phase 1's scoring service does.
 autoscaling:
   enabled: false
